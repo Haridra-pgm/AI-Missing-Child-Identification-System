@@ -1,0 +1,27 @@
+__pycache__/
+*.py[cod]
+
+.env
+.venv/
+venv/
+
+logs/
+storage/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Model files
+*.pt
+*.pth
+*.h5
+*.keras
+*.onnx
+
+# Datasets
+dataset/
+datasets/
+
+# OS files
+.DS_Store
+Thumbs.db

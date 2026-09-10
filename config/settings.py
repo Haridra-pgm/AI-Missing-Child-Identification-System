@@ -1,0 +1,84 @@
+import os
+from pathlib import Path
+
+
+BASE_DIR = Path(__file__).resolve().parents[1]
+
+STORAGE_DIR = BASE_DIR / "storage"
+DATABASE_DIR = STORAGE_DIR / "database"
+DATABASE_PATH = DATABASE_DIR / "missing_child_system.db"
+CHILD_IMAGE_DIR = STORAGE_DIR / "child_images"
+FOUND_CHILD_UPLOAD_DIR = STORAGE_DIR / "found_child_uploads"
+AGE_PROGRESSION_DIR = STORAGE_DIR / "age_progression"
+TEMP_DIR = STORAGE_DIR / "temp"
+
+LOG_DIR = BASE_DIR / "logs"
+LOG_FILE = LOG_DIR / "app.log"
+
+MAX_UPLOAD_SIZE_MB = 5
+MAX_IMAGES_PER_CHILD = 5
+MIN_IMAGE_WIDTH = 80
+MIN_IMAGE_HEIGHT = 80
+
+FACE_EMBEDDING_BACKEND = "opencv_sface"
+
+MODEL_DIR = STORAGE_DIR / "models"
+OPENCV_YUNET_MODEL_PATH = MODEL_DIR / "face_detection_yunet_2023mar.onnx"
+OPENCV_SFACE_MODEL_PATH = MODEL_DIR / "face_recognition_sface_2021dec.onnx"
+OPENCV_YUNET_MODEL_URLS = (
+    "https://media.githubusercontent.com/media/opencv/opencv_zoo/main/models/face_detection_yunet/"
+    "face_detection_yunet_2023mar.onnx",
+    "https://github.com/opencv/opencv_zoo/raw/main/models/face_detection_yunet/"
+    "face_detection_yunet_2023mar.onnx",
+    "https://raw.githubusercontent.com/opencv/opencv_zoo/main/models/face_detection_yunet/"
+    "face_detection_yunet_2023mar.onnx",
+)
+OPENCV_SFACE_MODEL_URLS = (
+    "https://media.githubusercontent.com/media/opencv/opencv_zoo/main/models/face_recognition_sface/"
+    "face_recognition_sface_2021dec.onnx",
+    "https://github.com/opencv/opencv_zoo/raw/main/models/face_recognition_sface/"
+    "face_recognition_sface_2021dec.onnx",
+    "https://raw.githubusercontent.com/opencv/opencv_zoo/main/models/face_recognition_sface/"
+    "face_recognition_sface_2021dec.onnx",
+)
+OPENCV_YUNET_MODEL_SHA256 = "8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4"
+OPENCV_YUNET_MODEL_SIZE = 232589
+OPENCV_SFACE_MODEL_SHA256 = "0ba9fbfa01b5270c96627c4ef784da859931e02f04419c829e83484087c34e79"
+OPENCV_SFACE_MODEL_SIZE = 38696353
+OPENCV_FACE_SCORE_THRESHOLD = 0.80
+OPENCV_FACE_NMS_THRESHOLD = 0.30
+OPENCV_FACE_TOP_K = 5000
+OPENCV_SFACE_EMBEDDING_DIMENSION = 128
+
+MIN_FACE_IMAGE_QUALITY_SCORE = 35.0
+MIN_FACE_AREA_RATIO = 0.01
+MIN_EMBEDDING_L2_NORM = 0.01
+
+MATCH_TOP_K = 5
+MATCH_SIMILARITY_THRESHOLD = 0.70
+
+APP_PUBLIC_BASE_URL = os.getenv("CHILDSHIELD_APP_BASE_URL", "http://localhost:8501")
+
+NOMINATIM_SEARCH_URL = "https://nominatim.openstreetmap.org/search"
+NOMINATIM_USER_AGENT = "ChildShieldAI/1.0 (academic project; contact: local-deployment)"
+NOMINATIM_COUNTRY_CODES = os.getenv("CHILDSHIELD_NOMINATIM_COUNTRY_CODES", "in")
+NOMINATIM_TIMEOUT_SECONDS = 15
+NOMINATIM_MIN_REQUEST_INTERVAL_SECONDS = 1.0
+
+OVERPASS_API_URL = "https://overpass-api.de/api/interpreter"
+OVERPASS_TIMEOUT_SECONDS = 20
+POLICE_SEARCH_RADIUS_METERS = 5000
+POLICE_STATION_RESULT_LIMIT = 5
+
+AGE_PROGRESSION_MODEL_NAME = "Replicate FLUX.1 Kontext [pro] (black-forest-labs/flux-kontext-pro)"
+FRAN_FACE_REAGING_MODEL_PATH = MODEL_DIR / "fran_face_reaging_unet.pth"
+FRAN_FACE_REAGING_MODEL_URLS = (
+    "https://huggingface.co/timroelofs123/face_re-aging/resolve/main/best_unet_model.pth",
+)
+FRAN_FACE_REAGING_MODEL_SIZE = 124275652
+FRAN_FACE_REAGING_MODEL_SHA256 = "230b6a007c65af43a67dcbbb46f4504cff71031e6d410952ef195ba6db90e942"
+AGE_PROGRESSION_STRONG_IDENTITY_THRESHOLD = 0.82
+AGE_PROGRESSION_MODERATE_IDENTITY_THRESHOLD = 0.72
+AGE_PROGRESSION_MIN_IDENTITY_THRESHOLD = 0.65
+
+SQLITE_TIMEOUT_SECONDS = 30

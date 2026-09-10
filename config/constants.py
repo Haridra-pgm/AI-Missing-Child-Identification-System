@@ -1,0 +1,44 @@
+CHILD_STATUS_MISSING = "missing"
+
+ROLE_PARENT = "parent_guardian"
+ROLE_FINDER = "child_finder"
+ROLE_AUTHORITY = "authority"
+
+ROLE_LABELS = {
+    ROLE_PARENT: "Parent / Guardian",
+    ROLE_FINDER: "Child Finder",
+    ROLE_AUTHORITY: "Authority",
+}
+
+USER_ROLES = [ROLE_PARENT, ROLE_FINDER, ROLE_AUTHORITY]
+
+FOUND_REPORT_STATUS_PENDING = "pending_verification"
+FOUND_REPORT_STATUS_NO_MATCH = "no_match"
+FOUND_REPORT_STATUS_VERIFIED = "verified"
+FOUND_REPORT_STATUS_DISMISSED = "dismissed"
+
+FOUND_REPORT_STATUSES = [
+    FOUND_REPORT_STATUS_PENDING,
+    FOUND_REPORT_STATUS_NO_MATCH,
+    FOUND_REPORT_STATUS_VERIFIED,
+    FOUND_REPORT_STATUS_DISMISSED,
+]
+
+GENDER_OPTIONS = ["Male", "Female", "Other"]
+
+RELATIONSHIP_OPTIONS = [
+    "Father",
+    "Mother",
+    "Guardian",
+    "Relative",
+    "Other",
+]
+
+ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png"}
+ALLOWED_IMAGE_MIME_TYPES = {"image/jpeg", "image/png"}
+
+MIN_CHILD_AGE = 0
+MAX_CHILD_AGE = 100
+
+MAX_TEXT_LENGTH = 500
+MAX_ADDRESS_LENGTH = 1000

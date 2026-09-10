@@ -1,0 +1,192 @@
+import secrets
+import sqlite3
+from datetime import datetime
+from typing import Any
+
+from ai.embedding_generator import FaceEmbeddingDependencyError, FaceEmbeddingError
+from config.constants import CHILD_STATUS_MISSING
+from database.connection import database_transaction
+from database.repositories.child_repository import case_id_exists, create_missing_child
+from database.repositories.embedding_repository import create_face_embedding_records
+from database.repositories.image_repository import create_child_image_records, find_existing_image_hashes
+from database.repositories.log_repository import create_activity_log
+from database.repositories.parent_repository import create_parent_details
+from database.schema import initialize_database
+from services.embedding_service import generate_registration_embedding_batch
+from services.location_service import geocode_required_location
+from services.timeline_service import (
+    EVENT_ADDITIONAL_PHOTO_UPLOADED,
+    EVENT_CHILD_REGISTERED,
+    record_case_timeline_event,
+)
+from utils.file_handler import cleanup_saved_files, save_uploaded_images, validate_uploaded_images
+from utils.logger import get_logger
+from utils.validators import ValidationError, validate_child_data, validate_parent_data
+
+
+logger = get_logger(__name__)
+
+
+def register_missing_child(
+    child_data: dict[str, Any],
+    parent_data: dict[str, Any],
+    uploaded_files: list[Any] | None,
+    registered_by_user_id: int | None = None,
+    require_location_geocode: bool = False,
+) -> dict[str, Any]:
+    initialize_database()
+
+    normalized_child = validate_child_data(child_data)
+    _apply_required_last_seen_geocode(normalized_child, require_location_geocode)
+    normalized_parent = validate_parent_data(parent_data)
+    prepared_images = validate_uploaded_images(uploaded_files)
+
+    saved_image_paths: list[str] = []
+    case_id = ""
+    embedding_count = 0
+
+    try:
+        with database_transaction() as connection:
+            case_id = _generate_case_id(connection)
+            normalized_child["case_id"] = case_id
+            normalized_child["status"] = CHILD_STATUS_MISSING
+            normalized_child["registered_by"] = _normalize_optional_user_id(registered_by_user_id)
+
+            _reject_existing_images(connection, prepared_images)
+
+            saved_images = save_uploaded_images(case_id, prepared_images)
+            saved_image_paths = [record["absolute_path"] for record in saved_images]
+            embedding_batch = generate_registration_embedding_batch(saved_images)
+            embedding_records = embedding_batch.records
+            embedding_count = len(embedding_records)
+
+            child_id = create_missing_child(connection, normalized_child)
+            parent_id = create_parent_details(connection, child_id, normalized_parent)
+            create_child_image_records(connection, child_id, case_id, saved_images)
+            create_face_embedding_records(connection, child_id, embedding_records)
+            record_case_timeline_event(
+                connection,
+                child_id=child_id,
+                case_id=case_id,
+                event_type=EVENT_CHILD_REGISTERED,
+                event_title="Child Registered",
+                event_description="Missing-child case was registered with guardian details.",
+                metadata={"image_count": len(saved_images), "embedding_count": embedding_count},
+            )
+            for saved_image in saved_images:
+                record_case_timeline_event(
+                    connection,
+                    child_id=child_id,
+                    case_id=case_id,
+                    event_type=EVENT_ADDITIONAL_PHOTO_UPLOADED,
+                    event_title="Additional Photo Uploaded",
+                    event_description=f"Photo uploaded: {saved_image['original_filename']}",
+                    metadata={
+                        "image_path": saved_image["image_path"],
+                        "image_hash": saved_image["image_hash"],
+                    },
+                    deduplicate=False,
+                )
+
+            create_activity_log(
+                connection=connection,
+                action="register_missing_child",
+                entity_type="missing_child",
+                entity_id=child_id,
+                details={
+                    "case_id": case_id,
+                    "child_name": normalized_child["full_name"],
+                    "guardian_phone": normalized_parent["phone"],
+                    "image_count": len(saved_images),
+                    "embedding_count": embedding_count,
+                    "rejected_embedding_count": len(embedding_batch.rejected_reasons),
+                    "rejected_embedding_reasons": embedding_batch.rejected_reasons[:5],
+                    "embedding_model": embedding_records[0]["model_name"],
+                },
+            )
+
+        logger.info(
+            "Registered missing child case_id=%s image_count=%s embedding_count=%s",
+            case_id,
+            len(saved_image_paths),
+            embedding_count,
+        )
+        return {
+            "success": True,
+            "case_id": case_id,
+            "child_id": child_id,
+            "parent_id": parent_id,
+            "image_count": len(saved_image_paths),
+            "embedding_count": embedding_count,
+        }
+
+    except ValidationError:
+        cleanup_saved_files(saved_image_paths)
+        raise
+    except FaceEmbeddingDependencyError as exc:
+        cleanup_saved_files(saved_image_paths)
+        logger.exception("Face embedding dependencies are unavailable")
+        raise ValidationError(
+            "Face embedding service is unavailable. Install project dependencies and ensure model download access."
+        ) from exc
+    except FaceEmbeddingError as exc:
+        cleanup_saved_files(saved_image_paths)
+        logger.exception("Face embedding generation failed")
+        raise ValidationError("Face embedding generation failed. Please upload clearer child images.") from exc
+    except sqlite3.IntegrityError as exc:
+        cleanup_saved_files(saved_image_paths)
+        logger.warning("Registration failed due to integrity error: %s", exc)
+        raise ValidationError(
+            "This registration could not be saved because one of the uploaded images already exists."
+        ) from exc
+    except Exception:
+        cleanup_saved_files(saved_image_paths)
+        logger.exception("Registration failed for case_id=%s", case_id or "unassigned")
+        raise
+
+
+def _generate_case_id(connection: sqlite3.Connection) -> str:
+    date_part = datetime.utcnow().strftime("%Y%m%d")
+    for _ in range(10):
+        random_part = secrets.token_hex(3).upper()
+        case_id = f"MC-{date_part}-{random_part}"
+        if not case_id_exists(connection, case_id):
+            return case_id
+    raise RuntimeError("Unable to generate a unique case ID")
+
+
+def _normalize_optional_user_id(value: int | None) -> int | None:
+    if value is None:
+        return None
+    try:
+        normalized_value = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValidationError("Registered user ID is invalid.") from exc
+    if normalized_value <= 0:
+        raise ValidationError("Registered user ID is invalid.")
+    return normalized_value
+
+
+def _reject_existing_images(connection: sqlite3.Connection, prepared_images: list[Any]) -> None:
+    image_hashes = [image.image_hash for image in prepared_images]
+    existing_hashes = find_existing_image_hashes(connection, image_hashes)
+    if existing_hashes:
+        logger.warning("Duplicate image upload rejected existing_hash_count=%s", len(existing_hashes))
+        raise ValidationError("One or more uploaded images already exist in the child image database.")
+
+
+def _apply_required_last_seen_geocode(child_data: dict[str, Any], require_location_geocode: bool) -> None:
+    if not require_location_geocode:
+        return
+    if child_data.get("last_seen_latitude") is not None and child_data.get("last_seen_longitude") is not None:
+        return
+
+    geocode = geocode_required_location(child_data["last_seen_location"], field_name="Last seen location")
+    child_data["last_seen_latitude"] = geocode["latitude"]
+    child_data["last_seen_longitude"] = geocode["longitude"]
+    logger.info(
+        "Last seen location geocoded location=%s latitude=%s longitude=%s",
+        child_data["last_seen_location"],
+        geocode["latitude"],
+        geocode["longitude"],
+    )
